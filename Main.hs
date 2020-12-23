@@ -5,7 +5,7 @@ module Main where
 
 import qualified Data.ByteString.Lazy as BL
 import Data.Csv
-import Pure
+import HAC.Solver
 import qualified Data.Vector as V
 import System.Environment
 
