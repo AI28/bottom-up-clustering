@@ -54,33 +54,39 @@ to_list::Cluster->[Point]
 to_list (Singleton _ point) = [point]
 to_list (C _ (c1,c2)) = (to_list c1) ++ (to_list c2)
 
-helper_euclidean_distance::Point->Point->Maybe Float
-helper_euclidean_distance [] [] = Just 0.0
-helper_euclidean_distance (x:y:ys) [z] = Nothing
-helper_euclidean_distance [z] (x:y:ys) = Nothing
-helper_euclidean_distance (x:xs) (y:ys) = fmap (+((x-y) ^ 2)) (helper_euclidean_distance xs ys)
+helper_euclidean_distance::Point->Point->Float
+helper_euclidean_distance [] [] = 0.0
+helper_euclidean_distance (x:xs) (y:ys) = ((+) . (^2) $ (x-y)) $ (euclidean_distance xs ys)
 
-euclidean_distance::Point->Point->Maybe Float
-euclidean_distance e1 e2 = fmap sqrt $ helper_euclidean_distance e1 e2
+euclidean_distance::Point->Point->Float
+euclidean_distance p1 p2 = sqrt . helper_euclidean_distance p1 $ p2
 
-single_linkage::Cluster->Cluster->Similarity
-single_linkage c1 c2 = Similarity $ cluster_number c1 $ cluster_number c2 $ fromJust . minimum $ pure euclidean_distance <*> to_list c1 <*> to_list c2
+partial_constructor::Cluster->Cluster->Float->Similarity
+partial_constructor c1 c2= Similarity (cluster_number c1) (cluster_number c2)
+
+get_distances::(Point->Point->Float)->Cluster->Cluster->[Float]
+get_distances metric c1 c2 = pure metric <*> to_list c1 <*> to_list c2
+
+similarity::([Float]->Float)->Cluster->Cluster->Similarity
+similarity min_or_max c1 c2 = partial_constructor c1 c2 $ min_or_max $ get_distances euclidean_distance c1 c2 
 
 complete_linkage::Cluster->Cluster->Similarity
-complete_linkage c1 c2 = Similarity $ cluster_number c1 $ cluster_number c2 $ fromJust . maximum $ pure euclidean_distance <*> to_list c1 <*> to_list c2
+complete_linkage = similarity maximum
+
+single_linkage::Cluster->Cluster->Similarity
+single_linkage = similarity minimum
 
 average_linkage::Cluster->Cluster->Similarity
-average_linkage c1 c2 = Similarity $ cluster_number c1 $ cluster_number c2 $ foldr (\x y -> y + (x / no_of_points)) 0.0 distance_list
+average_linkage c1 c2 = partial_constructor c1 c2 $ foldr (\x y -> y + (x / no_of_points)) 0.0 distance_list
                       where
                        c1_points = to_list c1
                        c2_points = to_list c2
                        no_of_points = fromIntegral . length $ c1_points ++ c2_points
-                       distance_list = map fromJust (pure euclidean_distance <*> c1_points <*> c2_points)
+                       distance_list = pure euclidean_distance <*> c1_points <*> c2_points
 
 
 arg_max::(Cluster->Cluster->Similarity)->[Cluster]->Similarity
 arg_max f clusters = maximum $ Set.filter (\(Similarity c1 c2 _) -> c1 /= c2) $ Set.fromList $ pure f <*> clusters <*> clusters
-
 
 reduce_clusters::(Cluster->Cluster->Similarity)->[Cluster]->[Cluster]
 reduce_clusters _ [] = []
@@ -90,7 +96,6 @@ reduce_clusters sim clusters = (filter (\x -> x /= first_cluster && x /= second_
                                 first_cluster = fromJust . find ( \x -> cluster_number x == (firstCluster argmax)) $ clusters
                                 second_cluster = fromJust . find ( \x -> cluster_number x == (secondCluster argmax)) $ clusters
                                 last_cluster = maximum [ cluster_number x | x <- clusters]
-
 
 solve::(Cluster->Cluster->Similarity)->[Point]->Cluster
 solve _ [] = Void
